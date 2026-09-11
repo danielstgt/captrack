@@ -1,0 +1,32 @@
+# Builds CapTrack.app and attaches it to a GitHub release whenever a `v*` tag is pushed.
+#
+#   git tag v1.0.0 && git push origin v1.0.0
+#
+# Deliberately uses no third-party (or marketplace) actions: the repository is
+# cloned with git and the release is created with the preinstalled `gh` CLI.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - name: Check out tag
+        run: git clone --branch "$GITHUB_REF_NAME" "https://github.com/$GITHUB_REPOSITORY.git" .
+
+      - name: Build app and zip
+        run: make zip VERSION="${GITHUB_REF_NAME#v}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/CapTrack-*.zip \
+            --title "CapTrack ${GITHUB_REF_NAME#v}" \
+            --generate-notes
