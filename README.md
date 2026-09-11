@@ -32,7 +32,7 @@ does, so it never talks to Anthropic's API and never touches your credentials.
 - **Details on click:** both windows with progress bars, reset countdowns and the exact reset time.
 - **Zero dependencies:** Swift, AppKit and SwiftUI only. No packages, no frameworks, no update engine, no analytics. Nothing to supply-chain.
 - **Local by design:** reads one JSON file that Claude Code writes on your Mac. The only network request is the optional update check against GitHub.
-- **Small:** one binary, about a thousand lines of Swift, MIT licensed.
+- **Small:** one binary, a handful of Swift files, MIT licensed.
 
 ## How it works
 
@@ -82,8 +82,10 @@ once a window's reset time passes CapTrack shows 0% until the next message.
 move `CapTrack.app` to your Applications folder.
 
 The releases are built by GitHub Actions from the tagged source and are ad-hoc
-signed, not notarised. On first launch macOS will refuse to open it; right-click the
-app, choose **Open**, and confirm. Alternatively:
+signed, not notarised. On first launch macOS refuses to open the app. Open
+**System Settings › Privacy & Security**, scroll down to *Security*, click
+**Open Anyway** next to the CapTrack notice and confirm. Alternatively, clear the
+quarantine flag in Terminal:
 
 ```sh
 xattr -d com.apple.quarantine /Applications/CapTrack.app
@@ -160,28 +162,6 @@ attaches the zip to a GitHub release. It uses no marketplace actions.
 2560×1280) that GitHub shows when the repository is shared. It runs like a shell
 script but is written in Swift, because rendering text and vector graphics without
 third-party tools needs AppKit. Upload the result under *Settings › General › Social preview*.
-
-### Layout
-
-```
-Sources/CapTrack/
-├── main.swift                 entry point
-├── AppDelegate.swift          status item, popover, settings window, menus
-├── StatusItemIcon.swift       the menu bar ring
-├── Models/UsageSnapshot.swift parses Claude Code's status line JSON
-├── Services/
-│   ├── UsageStore.swift            watches the JSON file
-│   ├── ClaudeCodeIntegration.swift bridge script + settings.json setup
-│   ├── LaunchAtLogin.swift         SMAppService wrapper
-│   ├── UpdateChecker.swift         GitHub Releases lookup
-│   └── Preferences.swift           UserDefaults
-├── Views/                     SwiftUI popover and settings
-└── Support/                   formatting, app info, README renderer
-Tests/CapTrackTests/           swift-testing unit tests
-Art/                           social preview image and its generator
-Assets/                        logo and README screenshots
-Scripts/                       app icon generator
-```
 
 ## Uninstall
 
