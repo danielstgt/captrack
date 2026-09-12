@@ -18,6 +18,9 @@ nonisolated enum StatusSegment: Equatable, Sendable {
 /// bar appearance and stays crisp on any display.
 enum StatusItemRenderer {
     static let height: CGFloat = 18
+    /// Vertical centre line shared by rings and text. Half a point above the geometric
+    /// centre, which is where macOS places its own menu bar text.
+    static let centerY: CGFloat = height / 2 + 0.5
     static let ringDiameter: CGFloat = 13
     static let ringLineWidth: CGFloat = 2
     static let spacing: CGFloat = 4
@@ -92,7 +95,7 @@ enum StatusItemRenderer {
                 case .value(let text):
                     draw(text: text, muted: false, atX: item.x)
                 case .ring(let fraction):
-                    let rect = NSRect(x: item.x, y: ((height - ringDiameter) / 2).rounded(), width: ringDiameter, height: ringDiameter)
+                    let rect = NSRect(x: item.x, y: centerY - ringDiameter / 2, width: ringDiameter, height: ringDiameter)
                     drawRing(in: rect, fraction: fraction)
                 case .gap:
                     break
@@ -113,8 +116,10 @@ enum StatusItemRenderer {
 
     private static func draw(text: String, muted: Bool, atX x: CGFloat) {
         let string = attributed(text, muted: muted)
-        let size = string.size()
-        string.draw(at: NSPoint(x: x, y: ((height - size.height) / 2).rounded()))
+        // Centre the cap height (digits, capitals) on the centre line. Centring the line box
+        // instead would sit the glyphs too low, because its ascender is far taller than its descender.
+        let baseline = centerY - font.capHeight / 2
+        string.draw(at: NSPoint(x: x, y: (baseline + font.descender).rounded()))
     }
 
     static func drawRing(in rect: NSRect, fraction: Double?) {
