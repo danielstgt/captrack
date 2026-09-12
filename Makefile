@@ -10,7 +10,7 @@
 #   make clean
 
 APP        := CapTrack
-VERSION    ?= 1.0.0
+VERSION    ?= 1.0.1
 BUILD      ?= $(shell git rev-list --count HEAD 2>/dev/null || echo 1)
 BUNDLE_ID  ?= io.github.danielstgt.captrack
 MIN_OS     := 14.0
