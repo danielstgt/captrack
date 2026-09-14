@@ -74,6 +74,8 @@ once a window's reset time passes CapTrack shows 0% until the next message.
 - macOS 14 Sonoma or newer (Apple silicon and Intel)
 - Claude Code signed in with a Claude Pro or Max subscription. API-key sessions do not
   report rate limits.
+- To build from source: Xcode 26 or newer. The bare Command Line Tools are not enough
+  since version 27.0, see [Troubleshooting](#troubleshooting).
 
 ## Install
 
@@ -91,7 +93,7 @@ quarantine flag in Terminal:
 xattr -d com.apple.quarantine /Applications/CapTrack.app
 ```
 
-**Or build it yourself** (Xcode 26 or the matching command line tools):
+**Or build it yourself** (Xcode 26 or newer, see [Requirements](#requirements)):
 
 ```sh
 git clone https://github.com/danielstgt/captrack.git
@@ -154,6 +156,12 @@ Manager; the Makefile only assembles the `.app` bundle, generates the icon from
 `Assets/logo.svg` and signs it. Pass `SIGN_IDENTITY="Developer ID Application: …"`
 to sign with your own certificate.
 
+Before building, `make` checks the toolchain: it compiles a single SwiftUI `@State` and
+stops with an explanation if that fails, rather than minutes later with a wall of macro
+errors. When `xcode-select` points at the Command Line Tools but `/Applications/Xcode.app`
+exists, the Makefile builds with Xcode. Pass `DEVELOPER_DIR=/path/to/Xcode.app/Contents/Developer`
+to use a different Xcode.
+
 Releases are cut by pushing a tag: `git tag v1.2.0 && git push origin v1.2.0`. The
 workflow in `.github/workflows/release.yml` builds the app on a macOS runner and
 attaches the zip to a GitHub release. It uses no marketplace actions.
@@ -162,6 +170,41 @@ attaches the zip to a GitHub release. It uses no marketplace actions.
 2560×1280) that GitHub shows when the repository is shared. It runs like a shell
 script but is written in Swift, because rendering text and vector graphics without
 third-party tools needs AppKit. Upload the result under *Settings › General › Social preview*.
+
+## Troubleshooting
+
+All three errors below come from the Command Line Tools installation, not from CapTrack.
+`xcode-select -p` and `swift --version` show which toolchain is active. `make` detects
+the first two before it starts a build.
+
+**`external macro implementation type 'SwiftUIMacros.StateMacro' could not be found`**
+The Command Line Tools 27.0 ship the macOS 27 SDK, in which SwiftUI's `@State` is a
+macro, but not the `SwiftUIMacros` plugin that expands it. Only Xcode has the plugin, so
+no SwiftUI app builds with the bare Command Line Tools. Install Xcode and select it:
+
+```sh
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+```
+
+**`type 'SwiftSetting' has no member 'defaultIsolation'`**
+Command Line Tools that have been updated in place since early 2024 still contain two
+`*.private.swiftinterface` files from Swift 5.10 next to the current
+`PackageDescription` interface. The compiler prefers them, so every `Package.swift`
+sees a 2024 API. Delete them, or reinstall the tools into an empty directory:
+
+```sh
+sudo rm /Library/Developer/CommandLineTools/usr/lib/swift/pm/ManifestAPI/PackageDescription.swiftmodule/*.private.swiftinterface
+```
+
+**`dyld: Symbol not found` as soon as `swift build` starts**
+`swift-package` and a framework under `usr/lib/swift/pm/` come from two different
+Command Line Tools releases. Installing one release over another leaves the newer
+framework bundles in place. Remove the directory completely, then install one release:
+
+```sh
+sudo rm -rf /Library/Developer/CommandLineTools
+xcode-select --install
+```
 
 ## Uninstall
 

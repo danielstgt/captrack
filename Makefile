@@ -5,6 +5,7 @@
 #   make install    copy it to /Applications
 #   make zip        build/CapTrack-<version>.zip for a GitHub release
 #   make test       run the unit tests
+#   make preflight  check that the selected toolchain can build CapTrack
 #   make preview    re-render the README screenshots
 #   make og-image   render the social preview image for GitHub (Art/og-image.jpg)
 #   make clean
@@ -23,13 +24,50 @@ APP_DIR    := $(BUILD_DIR)/$(APP).app
 CONTENTS   := $(APP_DIR)/Contents
 ICONSET    := $(BUILD_DIR)/AppIcon.iconset
 ICNS       := $(BUILD_DIR)/AppIcon.icns
-BIN_PATH    = $(shell swift build -c release $(ARCHS) --show-bin-path)
 
-.PHONY: all build app run install zip test preview og-image clean
+# Toolchain. CapTrack needs Xcode: the bare Command Line Tools 27.0 ship the macOS 27
+# SDK, in which SwiftUI's @State is a macro, but not the plugin that expands it. When
+# xcode-select points at the Command Line Tools and Xcode is installed, build with
+# Xcode instead. An explicit DEVELOPER_DIR is always respected.
+XCODE_DEVELOPER_DIR  ?= /Applications/Xcode.app/Contents/Developer
+ACTIVE_DEVELOPER_DIR ?= $(shell xcode-select -p 2>/dev/null)
+ifeq ($(origin DEVELOPER_DIR),undefined)
+  ifneq (,$(findstring /CommandLineTools,$(ACTIVE_DEVELOPER_DIR)))
+    ifneq (,$(wildcard $(XCODE_DEVELOPER_DIR)/usr/bin/xcodebuild))
+      export DEVELOPER_DIR := $(XCODE_DEVELOPER_DIR)
+    endif
+  endif
+endif
+
+.PHONY: all build app run install zip test preflight preview og-image clean
 
 all: app
 
-build:
+# Fail fast, with an explanation, instead of minutes into a build that cannot succeed.
+# Both checks target known Command Line Tools problems; Xcode passes them untouched.
+preflight:
+	@dev="$${DEVELOPER_DIR:-$$(xcode-select -p)}"; \
+	echo "Toolchain: $$dev"; \
+	echo "           $$(swift --version 2>/dev/null | head -1)"; \
+	if ls "$$dev"/usr/lib/swift/pm/ManifestAPI/PackageDescription.swiftmodule/*.private.swiftinterface >/dev/null 2>&1; then \
+	    echo "error: stale PackageDescription interfaces from an older Command Line Tools release shadow the"; \
+	    echo "       current ones, so no Package.swift compiles. Remove them:"; \
+	    echo "       sudo rm $$dev/usr/lib/swift/pm/ManifestAPI/PackageDescription.swiftmodule/*.private.swiftinterface"; \
+	    echo "       See README.md, section Troubleshooting."; \
+	    exit 1; \
+	fi; \
+	mkdir -p $(BUILD_DIR); \
+	printf 'import SwiftUI\nstruct V: View { @State private var n = 0; var body: some View { Text(verbatim: "\\(n)") } }\n' > $(BUILD_DIR)/preflight.swift; \
+	if ! swiftc -typecheck $(BUILD_DIR)/preflight.swift 2>$(BUILD_DIR)/preflight.log; then \
+	    echo "error: this toolchain cannot compile SwiftUI:"; \
+	    grep -m1 'error:' $(BUILD_DIR)/preflight.log | sed 's/^/       /'; \
+	    echo "       CapTrack needs Xcode 26 or newer; the Command Line Tools 27.0 lack the SwiftUI macro plugin."; \
+	    echo "       Install Xcode, then: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"; \
+	    echo "       See README.md, section Troubleshooting."; \
+	    exit 1; \
+	fi
+
+build: preflight
 	swift build -c release $(ARCHS)
 
 $(ICNS): Assets/logo.svg Scripts/generate-icon.swift
@@ -37,10 +75,11 @@ $(ICNS): Assets/logo.svg Scripts/generate-icon.swift
 	swift Scripts/generate-icon.swift Assets/logo.svg $(ICONSET)
 	iconutil -c icns $(ICONSET) -o $(ICNS)
 
+# The products directory depends on the toolchain, so ask the same `swift` that built.
 app: build $(ICNS)
 	rm -rf $(APP_DIR)
 	mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources
-	cp "$(BIN_PATH)/$(APP)" $(CONTENTS)/MacOS/$(APP)
+	cp "$$(swift build -c release $(ARCHS) --show-bin-path)/$(APP)" $(CONTENTS)/MacOS/$(APP)
 	cp $(ICNS) $(CONTENTS)/Resources/AppIcon.icns
 	sed -e 's/__VERSION__/$(VERSION)/g' -e 's/__BUILD__/$(BUILD)/g' \
 	    -e 's/__BUNDLE_ID__/$(BUNDLE_ID)/g' -e 's/__MIN_OS__/$(MIN_OS)/g' \
@@ -62,7 +101,7 @@ zip: app
 	ditto -c -k --keepParent $(APP_DIR) $(BUILD_DIR)/$(APP)-$(VERSION).zip
 	@echo "Created $(BUILD_DIR)/$(APP)-$(VERSION).zip"
 
-test:
+test: preflight
 	swift test
 
 preview: app
