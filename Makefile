@@ -25,6 +25,12 @@ CONTENTS   := $(APP_DIR)/Contents
 ICONSET    := $(BUILD_DIR)/AppIcon.iconset
 ICNS       := $(BUILD_DIR)/AppIcon.icns
 
+# Build the app product only. A bare `swift build` goes through SwiftPM's synthesized
+# aggregate target, which has no deployment target of its own and falls back to the
+# SDK's. From the macOS 27 SDK on that draws "The x86_64 architecture is deprecated for
+# your deployment target", although the app itself targets macOS $(MIN_OS).
+SWIFT_BUILD := swift build -c release $(ARCHS) --product $(APP)
+
 # Toolchain. CapTrack needs Xcode: the bare Command Line Tools 27.0 ship the macOS 27
 # SDK, in which SwiftUI's @State is a macro, but not the plugin that expands it. When
 # xcode-select points at the Command Line Tools and Xcode is installed, build with
@@ -68,7 +74,7 @@ preflight:
 	fi
 
 build: preflight
-	swift build -c release $(ARCHS)
+	$(SWIFT_BUILD)
 
 $(ICNS): Assets/logo.svg Scripts/generate-icon.swift
 	rm -rf $(ICONSET)
@@ -79,7 +85,7 @@ $(ICNS): Assets/logo.svg Scripts/generate-icon.swift
 app: build $(ICNS)
 	rm -rf $(APP_DIR)
 	mkdir -p $(CONTENTS)/MacOS $(CONTENTS)/Resources
-	cp "$$(swift build -c release $(ARCHS) --show-bin-path)/$(APP)" $(CONTENTS)/MacOS/$(APP)
+	cp "$$($(SWIFT_BUILD) --show-bin-path)/$(APP)" $(CONTENTS)/MacOS/$(APP)
 	cp $(ICNS) $(CONTENTS)/Resources/AppIcon.icns
 	sed -e 's/__VERSION__/$(VERSION)/g' -e 's/__BUILD__/$(BUILD)/g' \
 	    -e 's/__BUNDLE_ID__/$(BUNDLE_ID)/g' -e 's/__MIN_OS__/$(MIN_OS)/g' \
